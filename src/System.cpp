@@ -6,8 +6,8 @@ using namespace std;
 using namespace cv;
 using namespace pangolin;
 
-System::System(string sConfig_file_)
-    :bStart_backend(true)
+// 构造函数
+System::System(string sConfig_file_): bStart_backend(true)
 {
     string sConfig_file = sConfig_file_ + "euroc_config.yaml";
 
@@ -18,8 +18,7 @@ System::System(string sConfig_file_)
 
     estimator.setParameter();
     ofs_pose.open("./pose_output.txt",fstream::app | fstream::out);
-    if(!ofs_pose.is_open())
-    {
+    if (!ofs_pose.is_open()) {
         cerr << "ofs_pose is not open" << endl;
     }
     // thread thd_RunBackend(&System::process,this);
@@ -27,6 +26,7 @@ System::System(string sConfig_file_)
     cout << "2 System() end" << endl;
 }
 
+// 析构函数
 System::~System()
 {
     bStart_backend = false;
@@ -49,15 +49,13 @@ System::~System()
 
 void System::PubImageData(double dStampSec, Mat &img)
 {
-    if (!init_feature)
-    {
+    if (!init_feature) {
         cout << "1 PubImageData skip the first detected feature, which doesn't contain optical flow speed" << endl;
         init_feature = 1;
         return;
     }
 
-    if (first_image_flag)
-    {
+    if (first_image_flag) {
         cout << "2 PubImageData first_image_flag" << endl;
         first_image_flag = false;
         first_image_time = dStampSec;
@@ -65,8 +63,7 @@ void System::PubImageData(double dStampSec, Mat &img)
         return;
     }
     // detect unstable camera stream
-    if (dStampSec - last_image_time > 1.0 || dStampSec < last_image_time)
-    {
+    if (dStampSec - last_image_time > 1.0 || dStampSec < last_image_time) {
         cerr << "3 PubImageData image discontinue! reset the feature tracker!" << endl;
         first_image_flag = true;
         last_image_time = 0;
@@ -75,18 +72,15 @@ void System::PubImageData(double dStampSec, Mat &img)
     }
     last_image_time = dStampSec;
     // frequency control
-    if (round(1.0 * pub_count / (dStampSec - first_image_time)) <= FREQ)
-    {
+    if (round(1.0 * pub_count / (dStampSec - first_image_time)) <= FREQ) {
         PUB_THIS_FRAME = true;
         // reset the frequency control
-        if (abs(1.0 * pub_count / (dStampSec - first_image_time) - FREQ) < 0.01 * FREQ)
-        {
+        if (abs(1.0 * pub_count / (dStampSec - first_image_time) - FREQ) < 0.01 * FREQ) {
             first_image_time = dStampSec;
             pub_count = 0;
         }
     }
-    else
-    {
+    else {
         PUB_THIS_FRAME = false;
     }
 
@@ -94,30 +88,25 @@ void System::PubImageData(double dStampSec, Mat &img)
     // cout << "3 PubImageData t : " << dStampSec << endl;
     trackerData[0].readImage(img, dStampSec);
 
-    for (unsigned int i = 0;; i++)
-    {
+    for (unsigned int i = 0;; i++) {
         bool completed = false;
         completed |= trackerData[0].updateID(i);
 
         if (!completed)
             break;
     }
-    if (PUB_THIS_FRAME)
-    {
+    if (PUB_THIS_FRAME) {
         pub_count++;
         shared_ptr<IMG_MSG> feature_points(new IMG_MSG());
         feature_points->header = dStampSec;
         vector<set<int>> hash_ids(NUM_OF_CAM);
-        for (int i = 0; i < NUM_OF_CAM; i++)
-        {
+        for (int i = 0; i < NUM_OF_CAM; i++) {
             auto &un_pts = trackerData[i].cur_un_pts;
             auto &cur_pts = trackerData[i].cur_pts;
             auto &ids = trackerData[i].ids;
             auto &pts_velocity = trackerData[i].pts_velocity;
-            for (unsigned int j = 0; j < ids.size(); j++)
-            {
-                if (trackerData[i].track_cnt[j] > 1)
-                {
+            for (unsigned int j = 0; j < ids.size(); j++) {
+                if (trackerData[i].track_cnt[j] > 1) {
                     int p_id = ids[j];
                     hash_ids[i].insert(p_id);
                     double x = un_pts[j].x;
@@ -133,13 +122,11 @@ void System::PubImageData(double dStampSec, Mat &img)
             }
             //}
             // skip the first image; since no optical speed on frist image
-            if (!init_pub)
-            {
+            if (!init_pub) {
                 cout << "4 PubImage init_pub skip the first image!" << endl;
                 init_pub = 1;
             }
-            else
-            {
+            else {
                 m_buf.lock();
                 feature_buf.push(feature_points);
                 // cout << "5 PubImage t : " << fixed << feature_points->header
@@ -153,45 +140,36 @@ void System::PubImageData(double dStampSec, Mat &img)
 #ifdef __linux__
     cv::Mat show_img;
 	cv::cvtColor(img, show_img, CV_GRAY2RGB);
-	if (SHOW_TRACK)
-	{
-		for (unsigned int j = 0; j < trackerData[0].cur_pts.size(); j++)
-        {
+	if (SHOW_TRACK) {
+		for (unsigned int j = 0; j < trackerData[0].cur_pts.size(); j++) {
 			double len = min(1.0, 1.0 * trackerData[0].track_cnt[j] / WINDOW_SIZE);
 			cv::circle(show_img, trackerData[0].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
 		}
-
         cv::namedWindow("IMAGE", CV_WINDOW_AUTOSIZE);
 		cv::imshow("IMAGE", show_img);
         cv::waitKey(1);
 	}
 #endif    
     // cout << "5 PubImage" << endl;
-    
 }
 
 vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
 {
     vector<pair<vector<ImuConstPtr>, ImgConstPtr>> measurements;
-
-    while (true)
-    {
-        if (imu_buf.empty() || feature_buf.empty())
-        {
+    while (true) {
+        if (imu_buf.empty() || feature_buf.empty()) {
             // cerr << "1 imu_buf.empty() || feature_buf.empty()" << endl;
             return measurements;
         }
 
-        if (!(imu_buf.back()->header > feature_buf.front()->header + estimator.td))
-        {
+        if (!(imu_buf.back()->header > feature_buf.front()->header + estimator.td)) {
             cerr << "wait for imu, only should happen at the beginning sum_of_wait: " 
                 << sum_of_wait << endl;
             sum_of_wait++;
             return measurements;
         }
 
-        if (!(imu_buf.front()->header < feature_buf.front()->header + estimator.td))
-        {
+        if (!(imu_buf.front()->header < feature_buf.front()->header + estimator.td)) {
             cerr << "throw img, only should happen at the beginning" << endl;
             feature_buf.pop();
             continue;
@@ -220,15 +198,14 @@ vector<pair<vector<ImuConstPtr>, ImgConstPtr>> System::getMeasurements()
 }
 
 void System::PubImuData(double dStampSec, const Eigen::Vector3d &vGyr, 
-    const Eigen::Vector3d &vAcc)
+                        const Eigen::Vector3d &vAcc)
 {
     shared_ptr<IMU_MSG> imu_msg(new IMU_MSG());
 	imu_msg->header = dStampSec;
 	imu_msg->linear_acceleration = vAcc;
 	imu_msg->angular_velocity = vGyr;
 
-    if (dStampSec <= last_imu_t)
-    {
+    if (dStampSec <= last_imu_t) {
         cerr << "imu message in disorder!" << endl;
         return;
     }
@@ -248,8 +225,7 @@ void System::PubImuData(double dStampSec, const Eigen::Vector3d &vGyr,
 void System::ProcessBackEnd()
 {
     cout << "1 ProcessBackEnd start" << endl;
-    while (bStart_backend)
-    {
+    while (bStart_backend) {
         // cout << "1 process()" << endl;
         vector<pair<vector<ImuConstPtr>, ImgConstPtr>> measurements;
         
@@ -265,16 +241,13 @@ void System::ProcessBackEnd()
         }
         lk.unlock();
         m_estimator.lock();
-        for (auto &measurement : measurements)
-        {
+        for (auto &measurement : measurements) {
             auto img_msg = measurement.second;
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
-            for (auto &imu_msg : measurement.first)
-            {
+            for (auto &imu_msg : measurement.first) {
                 double t = imu_msg->header;
                 double img_t = img_msg->header + estimator.td;
-                if (t <= img_t)
-                {
+                if (t <= img_t) {
                     if (current_time < 0)
                         current_time = t;
                     double dt = t - current_time;
@@ -289,8 +262,7 @@ void System::ProcessBackEnd()
                     estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
                     // printf("1 BackEnd imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
                 }
-                else
-                {
+                else {
                     double dt_1 = img_t - current_time;
                     double dt_2 = t - img_t;
                     current_time = img_t;
@@ -315,8 +287,7 @@ void System::ProcessBackEnd()
 
             // TicToc t_s;
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
-            for (unsigned int i = 0; i < img_msg->points.size(); i++) 
-            {
+            for (unsigned int i = 0; i < img_msg->points.size(); i++) {
                 int v = img_msg->id_of_point[i] + 0.5;
                 int feature_id = v / NUM_OF_CAM;
                 int camera_id = v % NUM_OF_CAM;
@@ -335,8 +306,7 @@ void System::ProcessBackEnd()
             TicToc t_processImage;
             estimator.processImage(image, img_msg->header);
             
-            if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
-            {
+            if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR) {
                 Vector3d p_wi;
                 Quaterniond q_wi;
                 q_wi = Quaterniond(estimator.Rs[WINDOW_SIZE]);
@@ -436,8 +406,7 @@ void System::InitDrawGL()
 void System::DrawGLFrame() 
 {  
 
-    if (pangolin::ShouldQuit() == false)
-    {
+    if (pangolin::ShouldQuit() == false) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         d_cam.Activate(s_cam);
@@ -450,16 +419,14 @@ void System::DrawGLFrame()
         glLineWidth(2);
         glBegin(GL_LINES);
         int nPath_size = vPath_to_draw.size();
-        for(int i = 0; i < nPath_size-1; ++i)
-        {        
+        for(int i = 0; i < nPath_size-1; ++i) {        
             glVertex3f(vPath_to_draw[i].x(), vPath_to_draw[i].y(), vPath_to_draw[i].z());
             glVertex3f(vPath_to_draw[i+1].x(), vPath_to_draw[i+1].y(), vPath_to_draw[i+1].z());
         }
         glEnd();
         
         // points
-        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
-        {
+        if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR) {
             glPointSize(5);
             glBegin(GL_POINTS);
             for(int i = 0; i < WINDOW_SIZE+1;++i)

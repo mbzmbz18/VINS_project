@@ -1,14 +1,11 @@
 #pragma once
-
 #include <stdio.h>
 #include <queue>
 #include <map>
 #include <thread>
 #include <mutex>
-
 #include <fstream>
 #include <condition_variable>
-
 // #include <cv.h>
 // #include <opencv2/opencv.hpp>
 #include <pangolin/pangolin.h>
@@ -17,8 +14,7 @@
 #include "parameters.h"
 #include "feature_tracker.h"
 
-
-//imu for vio
+// struct: IMU数据
 struct IMU_MSG
 {
     double header;
@@ -27,8 +23,9 @@ struct IMU_MSG
 };
 typedef std::shared_ptr<IMU_MSG const> ImuConstPtr;
 
-//image for vio    
-struct IMG_MSG {
+// struct: 相机数据
+struct IMG_MSG 
+{
     double header;
     vector<Vector3d> points;
     vector<int> id_of_point;
@@ -39,17 +36,20 @@ struct IMG_MSG {
 };
 typedef std::shared_ptr <IMG_MSG const > ImgConstPtr;
     
+// 系统
 class System
 {
 public:
+    // 构造函数
     System(std::string sConfig_files);
-
+    // 析构函数
     ~System();
 
-    void PubImageData(double dStampSec, cv::Mat &img);
-
-    void PubImuData(double dStampSec, const Eigen::Vector3d &vGyr, 
-        const Eigen::Vector3d &vAcc);
+    // 用于发布图像数据
+    void PubImageData(double dStampSec, cv::Mat& img);
+    // 用于发布IMU数据
+    void PubImuData(double dStampSec, const Eigen::Vector3d& vGyr, 
+                    const Eigen::Vector3d& vAcc);
 
     // thread: visual-inertial odometry
     void ProcessBackEnd();
@@ -65,7 +65,7 @@ public:
 
 private:
 
-    //feature tracker
+    // feature tracker
     std::vector<uchar> r_status;
     std::vector<float> r_err;
     // std::queue<ImageConstPtr> img_buf;
@@ -80,7 +80,7 @@ private:
     double last_image_time = 0;
     bool init_pub = 0;
 
-    //estimator
+    // estimator
     Estimator estimator;
 
     std::condition_variable con;
@@ -110,5 +110,5 @@ private:
     std::vector<Eigen::Vector3d> vPath_to_draw;
     bool bStart_backend;
     std::vector<std::pair<std::vector<ImuConstPtr>, ImgConstPtr>> getMeasurements();
-    
 };
+
